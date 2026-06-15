@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#06080f">
+<title>F13LD.queue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#06080f; --panel:#111118; --card:#0e0e1a; --border:#2a2a3a;
+    --text:#e0e0ff; --muted:#6b6b7e; --dim:#9a9ab0;
+    --cyan:#22d3ee; --purple:#7c6ff7; --amber:#f59e0b; --fail:#f87171;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:
+      radial-gradient(1100px 520px at 50% -8%, rgba(34,211,238,.07), transparent 60%),
+      var(--bg);
+    color:var(--text); font-family:'Exo 2',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.45;
+    padding:max(14px,env(safe-area-inset-top)) 14px calc(40px + env(safe-area-inset-bottom));
+  }
+  .wrap{max-width:560px;margin:0 auto}
+
+  /* header */
+  .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:6px 2px 18px}
+  .mark{font-weight:700;font-size:19px;letter-spacing:.02em}
+  .mark .dot{color:var(--cyan)}
+  .tagline{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+
+  /* claim ticket — the signature element */
+  .ticket{
+    position:relative;background:linear-gradient(180deg,#13131d,#0d0d16);
+    border:.5px solid var(--border);border-radius:16px;padding:18px 18px 16px;margin-bottom:16px;
+    box-shadow:0 10px 40px rgba(0,0,0,.45);overflow:hidden;
+  }
+  .ticket::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
+    background:linear-gradient(90deg,var(--cyan),var(--purple))}
+  .ticket-lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .code{font-weight:700;font-size:30px;letter-spacing:.01em;margin:3px 0 2px;word-break:break-word}
+  .code .sep{color:var(--cyan);font-weight:500;padding:0 .06em}
+  .expiry{font-size:11px;color:var(--dim)}
+  .expiry b{color:var(--amber);font-weight:600}
+  .ticket-grid{display:flex;gap:14px;align-items:flex-start;margin-top:4px}
+  .ticket-main{flex:1;min-width:0}
+  #qr{flex:0 0 auto;width:96px;height:96px;background:#fff;border-radius:10px;padding:7px;display:flex;align-items:center;justify-content:center}
+  #qr img,#qr canvas{display:block;width:100%!important;height:100%!important}
+  .qr-fallback{font-size:10px;color:#444;text-align:center}
+
+  .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  button{font-family:inherit;cursor:pointer}
+  .btn{font-size:13px;font-weight:500;letter-spacing:.02em;padding:9px 14px;border-radius:9px;
+    border:.5px solid var(--border);background:var(--card);color:var(--text);transition:border-color .12s,background .12s,color .12s}
+  .btn:hover{border-color:#3d3d52}
+  .btn:active{transform:translateY(.5px)}
+  .btn.primary{background:var(--cyan);color:#04222a;border-color:var(--cyan);font-weight:600}
+  .btn.primary:hover{background:#3ddcf2}
+  .btn.ghost{background:transparent;color:var(--dim)}
+  .btn.icon{padding:9px 11px}
+  .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .spacer{flex:1}
+
+  /* menu */
+  .menu-wrap{position:relative}
+  .menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--panel);border:.5px solid var(--border);
+    border-radius:10px;padding:5px;min-width:170px;z-index:20;box-shadow:0 12px 36px rgba(0,0,0,.5);display:none}
+  .menu.open{display:block}
+  .menu button{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--text);
+    font-size:13px;padding:9px 11px;border-radius:7px}
+  .menu button:hover{background:var(--card)}
+  .menu button.danger{color:var(--fail)}
+
+  /* section heading */
+  .sec{display:flex;align-items:baseline;justify-content:space-between;margin:22px 2px 10px}
+  .sec h2{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0}
+  .count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  /* recipe cards */
+  .items{display:flex;flex-direction:column;gap:9px}
+  .item{display:flex;gap:12px;align-items:center;background:var(--card);border:.5px solid var(--border);
+    border-radius:12px;padding:9px;position:relative;overflow:hidden}
+  .item::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--fc,#888)}
+  .thumb{flex:0 0 auto;width:60px;height:60px;border-radius:8px;background:#070710;border:.5px solid var(--border);
+    object-fit:cover;image-rendering:auto}
+  .item-body{flex:1;min-width:0}
+  .item-fam{display:flex;align-items:center;gap:7px}
+  .fdot{width:8px;height:8px;border-radius:50%;background:var(--fc,#888);flex:0 0 auto}
+  .item-label{font-weight:600;font-size:14px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item-meta{font-size:11px;color:var(--muted);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 10px}
+  .item-meta .stat{font-variant-numeric:tabular-nums}
+  .item-acts{flex:0 0 auto;display:flex;flex-direction:column;gap:5px}
+  .iact{background:transparent;border:.5px solid var(--border);border-radius:6px;color:var(--muted);
+    font-size:12px;line-height:1;padding:6px 8px;transition:color .1s,border-color .1s}
+  .iact:hover{color:var(--text);border-color:#3d3d52}
+  .iact.del:hover{color:var(--fail);border-color:var(--fail)}
+
+  /* empty + landing */
+  .empty{border:.5px dashed var(--border);border-radius:14px;padding:30px 20px;text-align:center;color:var(--dim)}
+  .empty .big{font-size:15px;color:var(--text);font-weight:500;margin-bottom:6px}
+  .empty .sub{font-size:13px;color:var(--muted)}
+  .field{display:flex;gap:8px;margin-top:12px}
+  .field input{flex:1;background:#070710;border:.5px solid var(--border);border-radius:9px;color:var(--text);
+    font-family:inherit;font-size:15px;padding:10px 12px;letter-spacing:.02em}
+  .field input:focus{outline:none;border-color:var(--cyan)}
+  .note{font-size:11px;color:var(--muted);margin-top:18px;text-align:center;line-height:1.6}
+  .skel{height:74px;border-radius:12px;background:linear-gradient(90deg,#0e0e1a,#15151f,#0e0e1a);
+    background-size:200% 100%;animation:sh 1.2s linear infinite}
+  @keyframes sh{to{background-position:-200% 0}}
+  @media (prefers-reduced-motion:reduce){.skel{animation:none}*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="mark">F13LD<span class="dot">.</span>queue</div>
+    <div class="tagline">collect &middot; mesh later</div>
+  </div>
+  <div id="app"></div>
+  <div class="note" id="note"></div>
+</div>
+
+<script src="./f13ld-queue.js"></script>
+<script>
+(function(){
+  var Q = window.F13LDQueue;
+  var app = document.getElementById('app');
+  var note = document.getElementById('note');
+  var state = { code:null, meta:null, items:[], loading:false };
+  var qr = null;
+
+  // f13ld-queue.js must load before this runs. If it didn't (e.g. the file
+  // isn't sitting beside this page, as in the in-chat preview), say so plainly
+  // rather than throwing an uncaught error on the first Q.* call.
+  if(!Q){
+    app.innerHTML = '<div class="empty"><div class="big">Queue engine didn\u2019t load</div>'
+      + '<div class="sub">This page needs <b>f13ld-queue.js</b> in the same folder. '
+      + 'The in-chat preview serves the two files separately, so the app only runs once both are deployed together '
+      + '(at <b>mshomper.github.io/f13ld.queue/</b>) or opened from a local folder containing both.</div></div>';
+    return;
+  }
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function fmtCode(c){ if(!c) return ''; var p=c.split('-'); return p.length>=2 ? esc(p[0])+'<span class="sep">-</span>'+esc(p.slice(1).join('-')) : esc(c); }
+  function daysLeft(meta){
+    if(!meta||!meta.expires_at) return null;
+    return Math.max(0, Math.ceil((new Date(meta.expires_at)-Date.now())/86400000));
+  }
+  function timeAgo(t){
+    var s=(Date.now()-new Date(t))/1000;
+    if(s<90) return 'just now';
+    if(s<3600) return Math.round(s/60)+'m ago';
+    if(s<86400) return Math.round(s/3600)+'h ago';
+    return Math.round(s/86400)+'d ago';
+  }
+
+  // ── adopt ?code= ────────────────────────────────────────────────────
+  var params = new URLSearchParams(location.search);
+  if(params.has('code')){
+    var c = (params.get('code')||'').trim().toLowerCase();
+    if(c) Q.setCode(c);
+    history.replaceState({}, '', location.pathname);
+  }
+  state.code = Q.getCode();
+
+  // ── render: landing (no active queue) ───────────────────────────────
+  function renderLanding(){
+    note.textContent='';
+    app.innerHTML =
+      '<div class="empty">'
+      + '<div class="big">No queue on this device yet</div>'
+      + '<div class="sub">Start one to begin collecting recipes, or enter a code to pick up a queue from another device.</div>'
+      + '<div class="row" style="justify-content:center;margin-top:16px"><button class="btn primary" id="create">Create a queue</button></div>'
+      + '<div class="field"><input id="codein" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="adjective-noun"><button class="btn" id="adopt">Use code</button></div>'
+      + '</div>';
+    document.getElementById('create').onclick=function(){
+      this.disabled=true; this.textContent='Creating\u2026';
+      Q.newCode().then(function(c){ state.code=c; refresh(); });
+    };
+    document.getElementById('adopt').onclick=adoptFromInput;
+    document.getElementById('codein').addEventListener('keydown',function(e){ if(e.key==='Enter') adoptFromInput(); });
+  }
+  function adoptFromInput(){
+    var v=(document.getElementById('codein').value||'').trim().toLowerCase();
+    if(!v){ return; }
+    Q.setCode(v); state.code=v; refresh();
+  }
+
+  // ── render: loading ─────────────────────────────────────────────────
+  function renderLoading(){
+    app.innerHTML = ticketHTML() + '<div class="sec"><h2>Recipes</h2></div><div class="items">'
+      + '<div class="skel"></div><div class="skel"></div></div>';
+    wireTicket(); drawQR();
+  }
+
+  // ── render: error ───────────────────────────────────────────────────
+  function renderError(e){
+    app.innerHTML = ticketHTML()
+      + '<div class="empty" style="margin-top:16px"><div class="big">Couldn\u2019t reach the queue</div>'
+      + '<div class="sub">'+esc(e&&e.message||'Network error')+'</div>'
+      + '<div class="row" style="justify-content:center;margin-top:14px"><button class="btn" id="retry">Try again</button></div></div>';
+    wireTicket(); drawQR();
+    document.getElementById('retry').onclick=refresh;
+  }
+
+  // ── ticket header markup ────────────────────────────────────────────
+  function ticketHTML(){
+    var dl = daysLeft(state.meta);
+    var exp = dl==null ? 'New queue \u00b7 expires 30 days after the last activity'
+                       : 'Expires in <b>'+dl+' day'+(dl===1?'':'s')+'</b> of inactivity';
+    return '<div class="ticket">'
+      + '<div class="ticket-grid">'
+        + '<div class="ticket-main">'
+          + '<div class="ticket-lbl">Queue code</div>'
+          + '<div class="code">'+fmtCode(state.code)+'</div>'
+          + '<div class="expiry">'+exp+'</div>'
+        + '</div>'
+        + '<div id="qr"><span class="qr-fallback">QR</span></div>'
+      + '</div>'
+      + '<div class="row">'
+        + '<button class="btn primary" id="mesh">Open all in mesh</button>'
+        + '<button class="btn" id="share">Share</button>'
+        + '<button class="btn ghost" id="copy">Copy link</button>'
+        + '<span class="spacer"></span>'
+        + '<div class="menu-wrap">'
+          + '<button class="btn icon ghost" id="kebab" aria-label="More">\u22ef</button>'
+          + '<div class="menu" id="menu">'
+            + '<button id="clear">Clear all items</button>'
+            + '<button id="newcode" class="danger">Start a new code</button>'
+          + '</div>'
+        + '</div>'
+      + '</div>'
+    + '</div>';
+  }
+
+  function wireTicket(){
+    document.getElementById('mesh').onclick=function(){ window.open(Q.meshUrl(state.code), '_blank'); };
+    document.getElementById('copy').onclick=function(){
+      var url=Q.appUrl(state.code);
+      navigator.clipboard && navigator.clipboard.writeText(url).then(function(){ Q.toast('Link copied'); },
+        function(){ Q.toast(url); });
+    };
+    document.getElementById('share').onclick=function(){
+      var url=Q.appUrl(state.code);
+      if(navigator.share){ navigator.share({title:'F13LD queue '+state.code, text:'Pick up my F13LD queue', url:url}).catch(function(){}); }
+      else { navigator.clipboard && navigator.clipboard.writeText(url); Q.toast('Link copied'); }
+    };
+    var kebab=document.getElementById('kebab'), menu=document.getElementById('menu');
+    kebab.onclick=function(e){ e.stopPropagation(); menu.classList.toggle('open'); };
+    document.addEventListener('click',function(){ menu.classList.remove('open'); });
+    document.getElementById('clear').onclick=function(){
+      if(!state.items.length){ Q.toast('Already empty'); menu.classList.remove('open'); return; }
+      if(confirm('Clear all '+state.items.length+' items? The code '+state.code+' stays active.')){
+        Q.rpc('queue_clear',{p_code:state.code}).then(refresh);
+      }
+    };
+    document.getElementById('newcode').onclick=function(){
+      if(confirm('Start a fresh code? This device stops pointing at '+state.code+' (it will expire on its own). Other devices keep the old code until you re-share.')){
+        Q.newCode().then(function(c){ state.code=c; state.meta=null; state.items=[]; refresh(); });
+      }
+    };
+  }
+
+  function drawQR(){
+    var el=document.getElementById('qr'); if(!el) return;
+    if(typeof QRCode==='undefined'){ return; } // fallback "QR" text stays
+    el.innerHTML='';
+    try{
+      qr=new QRCode(el,{text:Q.appUrl(state.code),width:82,height:82,colorDark:'#06080f',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+    }catch(e){ el.innerHTML='<span class="qr-fallback">QR</span>'; }
+  }
+
+  // ── render: queue with items ────────────────────────────────────────
+  function renderQueue(){
+    var html = ticketHTML();
+    html += '<div class="sec"><h2>Recipes</h2><span class="count">'+state.items.length+'</span></div>';
+    if(!state.items.length){
+      html += '<div class="empty"><div class="big">Nothing queued yet</div>'
+            + '<div class="sub">Open a design tool and tap <b>Add to queue</b>. Items you collect on any device show up here.</div></div>';
+    } else {
+      html += '<div class="items">'+state.items.map(itemHTML).join('')+'</div>';
+    }
+    app.innerHTML = html;
+    note.innerHTML = 'Anyone with this code can view and edit the queue \u2014 that\u2019s what lets your devices share it. '
+      + 'Codes free up automatically 30 days after the last activity.';
+    wireTicket(); drawQR(); wireItems();
+  }
+
+  function itemHTML(it){
+    var col=Q.FAMILY_COLOR[it.family]||'#888';
+    var routed={family:it.family,subtype:it.subtype};
+    var lab=Q.buildLabel(it.recipe||{},routed);
+    var stats=lab.secondary.slice();
+    if(it.tool) stats.push(it.tool.replace(/^f13ld\./,'') + (it.tool_version?(' v'+it.tool_version):''));
+    stats.push(timeAgo(it.created_at));
+    var thumb = it.thumb ? '<img class="thumb" src="'+esc(it.thumb)+'" alt="">' : '<div class="thumb"></div>';
+    return '<div class="item" data-id="'+esc(it.id)+'" style="--fc:'+col+'">'
+      + thumb
+      + '<div class="item-body">'
+        + '<div class="item-fam"><span class="fdot"></span>'
+          + '<span class="item-label">'+esc(it.label||lab.primary)+'</span></div>'
+        + '<div class="item-meta">'+stats.map(function(s){return '<span class="stat">'+esc(s)+'</span>';}).join('')+'</div>'
+      + '</div>'
+      + '<div class="item-acts">'
+        + '<button class="iact ren" title="Rename">\u270e</button>'
+        + '<button class="iact del" title="Remove">\u2715</button>'
+      + '</div>'
+    + '</div>';
+  }
+
+  function wireItems(){
+    app.querySelectorAll('.item').forEach(function(el){
+      var id=el.getAttribute('data-id');
+      el.querySelector('.del').onclick=function(){
+        Q.rpc('queue_remove_item',{p_code:state.code,p_item_id:id}).then(function(){
+          state.items=state.items.filter(function(i){return i.id!==id;}); renderQueue();
+        });
+      };
+      el.querySelector('.ren').onclick=function(){
+        var it=state.items.find(function(i){return i.id===id;}); if(!it) return;
+        var cur=it.label||'';
+        var next=prompt('Rename this item',cur);
+        if(next!=null && next.trim() && next!==cur){
+          Q.rpc('queue_rename_item',{p_code:state.code,p_item_id:id,p_label:next.trim()}).then(function(){
+            it.label=next.trim(); renderQueue();
+          });
+        }
+      };
+    });
+  }
+
+  // ── fetch + route ───────────────────────────────────────────────────
+  function refresh(){
+    if(!state.code){ renderLanding(); return; }
+    renderLoading();
+    Q.rpc('queue_fetch',{p_code:state.code}).then(function(res){
+      state.meta = (res && res.meta) || { code:state.code, exists:false };
+      state.items = (res && res.items) || [];
+      renderQueue();
+    }).catch(renderError);
+  }
+
+  if(document.readyState==='complete') refresh();
+  else window.addEventListener('load', refresh);
+})();
+</script>
+</body>
+</html>

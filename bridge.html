@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>F13LD.queue bridge</title>
+<meta name="robots" content="noindex">
+</head>
+<body>
+<!--
+  Invisible cross-origin bridge for the F13LD.queue live badge.
+  Lives on the queue origin (mshomper.github.io), where the active queue code
+  is stored in localStorage. The landing (f13ld.app) embeds this as a hidden
+  iframe; this page reads the code + item count and postMessages them back to
+  the embedding origin. It renders nothing and does nothing else.
+-->
+<script>
+(function () {
+  var SUPABASE_URL = 'https://axinljpecycnvfncyhfs.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_DAlrNLqbUZiwkaA6wPSMIw_YUNY85LX';
+  var LS_KEY = 'f13ld_queue_code';
+
+  // Who asked: the ?to= origin set by the embedder, else the referrer's origin.
+  function target() {
+    try { var u = new URLSearchParams(location.search).get('to'); if (u) return u; } catch (e) {}
+    try { if (document.referrer) return new URL(document.referrer).origin; } catch (e) {}
+    return null;
+  }
+  var to = target();
+  function post(msg) { try { if (to && parent !== window) parent.postMessage(msg, to); } catch (e) {} }
+
+  var code = null;
+  try { code = localStorage.getItem(LS_KEY) || null; } catch (e) {}
+  if (!code) { post({ type: 'f13ld-queue', code: null, count: 0 }); return; }
+
+  fetch(SUPABASE_URL + '/rest/v1/rpc/queue_fetch', {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_code: code })
+  })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (res) {
+      var n = (res && res.items) ? res.items.length : 0;
+      post({ type: 'f13ld-queue', code: code, count: n });
+    })
+    .catch(function () { post({ type: 'f13ld-queue', code: code, count: 0 }); });
+})();
+</script>
+</body>
+</html>

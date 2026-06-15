@@ -137,9 +137,12 @@
   }
 
   // ── Codes ────────────────────────────────────────────────────────────
+  var LS_RECENT = 'f13ld_queue_recent', RECENT_MAX = 6;
+  function getRecent() { try { var a = JSON.parse(localStorage.getItem(LS_RECENT) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function pushRecent(code) { if (!code) return; try { var a = getRecent().filter(function (c) { return c !== code; }); a.unshift(code); localStorage.setItem(LS_RECENT, JSON.stringify(a.slice(0, RECENT_MAX))); } catch (e) {} }
   function genCode() { return QW_ADJ[Math.random()*QW_ADJ.length|0] + '-' + QW_NOUN[Math.random()*QW_NOUN.length|0]; }
   function getCode() { try { return localStorage.getItem(LS_KEY) || null; } catch (e) { return null; } }
-  function setCode(c) { try { localStorage.setItem(LS_KEY, c); } catch (e) {} return c; }
+  function setCode(c) { try { localStorage.setItem(LS_KEY, c); } catch (e) {} pushRecent(c); return c; }
   function newCode() {
     var tries = 0;
     function attempt() {
@@ -158,25 +161,25 @@
   function ensureCode() { var c = getCode(); return c ? Promise.resolve(c) : newCode(); }
 
   // ── Add a recipe to the active queue ────────────────────────────────
-  function add(json, opts) {
+  function addTo(code, json, opts) {
     opts = opts || {};
+    setCode(code);  // make active + remember in recents
     var routed = routeRecipe(json);
     var lab = buildLabel(json, routed);
     var src = sourceTag(json);
     var thumb = opts.thumb || snapshot(routed.family, routed.subtype);
-    var code;
-    return ensureCode().then(function (c) {
-      code = c;
-      return rpc('queue_add_item', {
-        p_code: code, p_family: routed.family, p_subtype: routed.subtype,
-        p_label: opts.label || lab.primary, p_tool: opts.tool || src.tool,
-        p_tool_version: src.ver, p_thumb: thumb, p_recipe: json
-      });
+    return rpc('queue_add_item', {
+      p_code: code, p_family: routed.family, p_subtype: routed.subtype,
+      p_label: opts.label || lab.primary, p_tool: opts.tool || src.tool,
+      p_tool_version: src.ver, p_thumb: thumb, p_recipe: json
     }).then(function (id) {
-      toast('Added to ' + code);
+      toast(opts.newQueue ? ('Started a new queue \u2014 ' + code) : ('Added to ' + code));
       return { id: id, code: code, family: routed.family, subtype: routed.subtype };
     });
   }
+  // Programmatic add: append to the active queue, minting one if none exists.
+  // (The mounted button uses the smarter no-silent-mint flow in mountButton.)
+  function add(json, opts) { return ensureCode().then(function (c) { return addTo(c, json, opts); }); }
 
   // ── Toast ────────────────────────────────────────────────────────────
   var toastEl = null, toastT = null;
@@ -196,25 +199,79 @@
   }
 
   // ── Mount an "Add to queue" button beside a tool's mesh handoff ─────
+  function injectMenuCSS() {
+    if (document.getElementById('f13ldq-css')) return;
+    var s = document.createElement('style'); s.id = 'f13ldq-css';
+    s.textContent =
+      '.f13ldq-split{display:inline-flex;align-items:stretch;gap:4px;position:relative;vertical-align:middle}'
+      + '.f13ldq-split>button{font-family:inherit}'
+      + '.f13ldq-caret{padding-left:8px;padding-right:8px;line-height:1}'
+      + '.f13ldq-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:210px;background:#fff;color:#1a1a22;'
+      + 'border:1px solid rgba(0,0,0,.12);border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.22);padding:5px;'
+      + 'z-index:99998;display:none;font:500 13px/1.25 "Exo 2",system-ui,sans-serif}'
+      + '.f13ldq-menu.open{display:block}'
+      + '.f13ldq-menu .hd{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#999;padding:6px 10px 4px}'
+      + '.f13ldq-menu .mi{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:0;'
+      + 'color:inherit;padding:8px 10px;border-radius:7px;cursor:pointer;font:inherit}'
+      + '.f13ldq-menu .mi:hover{background:rgba(0,0,0,.06)}'
+      + '.f13ldq-menu .mi .ck{width:13px;flex:0 0 auto;color:#0A5566;font-size:12px}'
+      + '.f13ldq-menu .mi.new{color:#0A5566;font-weight:600;border-top:1px solid rgba(0,0,0,.08);margin-top:3px;padding-top:9px}';
+    document.head.appendChild(s);
+  }
+
+  // Mount a smart "Add to queue" split control beside a tool's mesh handoff.
+  // Main button = one tap to the active queue (fast). Caret = pick the active
+  // code, a recent code, or "Start a new queue". When there is NO active code,
+  // the main button opens the chooser instead of silently minting a new list —
+  // unless there are no recents at all, in which case it mints with a distinct
+  // "Started a new queue" toast so a new list is never a silent surprise.
+  // opts: { mount, anchor, position:'before'|'after', className, text, getRecipe, tool }
   function mountButton(opts) {
     opts = opts || {};
     var mount = typeof opts.mount === 'string' ? document.querySelector(opts.mount) : opts.mount;
     if (!mount) { console.warn('F13LDQueue.mountButton: mount target not found'); return null; }
-    var b = document.createElement('button');
-    b.type = 'button'; b.className = 'f13ld-queue-add'; b.textContent = opts.text || 'Add to queue';
-    b.style.cssText = opts.style || ('font:500 12px/1 "Exo 2",system-ui,sans-serif;letter-spacing:.04em;'
-      + 'color:#22d3ee;background:transparent;border:.5px solid #2a2a3a;border-radius:6px;padding:7px 12px;cursor:pointer');
-    b.addEventListener('click', function () {
-      var recipe;
-      try { recipe = typeof opts.getRecipe === 'function' ? opts.getRecipe() : opts.recipe; }
-      catch (e) { toast('Could not read recipe'); console.error(e); return; }
-      if (!recipe) { toast('No recipe to add yet'); return; }
-      b.disabled = true;
-      add(recipe, { tool: opts.tool }).catch(function (e) { toast('Could not add — ' + (e.message || 'error')); console.error(e); })
-        .then(function () { b.disabled = false; });
+    injectMenuCSS();
+    var cls = opts.className || '';
+    var wrap = document.createElement('span'); wrap.className = 'f13ldq-split';
+    var main = document.createElement('button'); main.type = 'button';
+    main.className = (cls + ' f13ldq-main').trim(); main.textContent = opts.text || '\u2295 Add to queue';
+    var caret = document.createElement('button'); caret.type = 'button';
+    caret.className = (cls + ' f13ldq-caret').trim(); caret.textContent = '\u25be';
+    caret.setAttribute('aria-label', 'Choose queue');
+    var menu = document.createElement('div'); menu.className = 'f13ldq-menu';
+    wrap.appendChild(main); wrap.appendChild(caret); wrap.appendChild(menu);
+
+    function getRecipe() { try { return typeof opts.getRecipe === 'function' ? opts.getRecipe() : opts.recipe; } catch (e) { console.error(e); return null; } }
+    function busy(on) { main.disabled = on; caret.disabled = on; }
+    function run(p) { busy(true); p.catch(function (e) { toast('Could not add \u2014 ' + (e.message || 'error')); console.error(e); }).then(function () { busy(false); }); }
+    function addExisting(code) { var r = getRecipe(); if (!r) { toast('No recipe to add yet'); return; } run(addTo(code, r, { tool: opts.tool })); }
+    function addNew() { var r = getRecipe(); if (!r) { toast('No recipe to add yet'); return; } run(newCode().then(function (c) { return addTo(c, r, { tool: opts.tool, newQueue: true }); })); }
+    function close() { menu.classList.remove('open'); }
+    function open() {
+      var active = getCode(), recents = getRecent().filter(function (c) { return c !== active; }), html = '<div class="hd">Add to</div>';
+      if (active) html += '<button class="mi" data-code="' + active + '"><span class="ck">\u2713</span>' + active + '</button>';
+      recents.forEach(function (c) { html += '<button class="mi" data-code="' + c + '"><span class="ck"></span>' + c + '</button>'; });
+      html += '<button class="mi new" data-new="1"><span class="ck">+</span>Start a new queue</button>';
+      menu.innerHTML = html;
+      menu.querySelectorAll('.mi').forEach(function (b) {
+        b.addEventListener('click', function () { close(); if (b.getAttribute('data-new')) addNew(); else addExisting(b.getAttribute('data-code')); });
+      });
+      menu.classList.add('open');
+    }
+    main.addEventListener('click', function () {
+      var active = getCode();
+      if (active) { addExisting(active); return; }          // fast path
+      if (getRecent().length) { open(); }                   // ambiguous → let them choose, don't fragment
+      else { addNew(); }                                    // true first use → mint, loudly
     });
-    mount.appendChild(b);
-    return b;
+    caret.addEventListener('click', function (e) { e.stopPropagation(); if (menu.classList.contains('open')) close(); else open(); });
+    document.addEventListener('click', function (ev) { if (!wrap.contains(ev.target)) close(); });
+
+    var anchor = opts.anchor ? (typeof opts.anchor === 'string' ? document.querySelector(opts.anchor) : opts.anchor) : null;
+    if (anchor && opts.position === 'before') mount.insertBefore(wrap, anchor);
+    else if (anchor && opts.position === 'after') mount.insertBefore(wrap, anchor.nextSibling);
+    else mount.appendChild(wrap);
+    return wrap;
   }
 
   window.F13LDQueue = {
@@ -222,7 +279,8 @@
     FAMILY_LABEL: FAMILY_LABEL, FAMILY_COLOR: FAMILY_COLOR,
     routeRecipe: routeRecipe, buildLabel: buildLabel, snapshot: snapshot, rpc: rpc,
     getCode: getCode, setCode: setCode, newCode: newCode, ensureCode: ensureCode, genCode: genCode,
-    add: add, mountButton: mountButton, toast: toast,
+    getRecent: getRecent, pushRecent: pushRecent,
+    add: add, addTo: addTo, mountButton: mountButton, toast: toast,
     meshUrl: function (code) { return MESH_URL + '?queue=' + encodeURIComponent(code || getCode() || ''); },
     appUrl:  function (code) { return QUEUE_URL + '?code=' + encodeURIComponent(code || getCode() || ''); }
   };

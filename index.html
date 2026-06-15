@@ -36,10 +36,17 @@
   .ticket{
     position:relative;background:linear-gradient(180deg,#13131d,#0d0d16);
     border:.5px solid var(--border);border-radius:16px;padding:18px 18px 16px;margin-bottom:16px;
-    box-shadow:0 10px 40px rgba(0,0,0,.45);overflow:hidden;
+    box-shadow:0 10px 40px rgba(0,0,0,.45);
   }
-  .ticket::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
+  .ticket::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;border-radius:16px 16px 0 0;
     background:linear-gradient(90deg,var(--cyan),var(--purple))}
+  .switcher{margin-top:14px;border-top:.5px solid var(--border);padding-top:12px}
+  .switcher .field{margin-top:0}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{font-size:12px;color:var(--text);background:var(--card);border:.5px solid var(--border);border-radius:999px;
+    padding:6px 12px;cursor:pointer;font-family:inherit;letter-spacing:.01em}
+  .chip:hover{border-color:var(--cyan);color:var(--cyan)}
+  .chips .none{font-size:12px;color:var(--muted);align-self:center}
   .ticket-lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
   .code{font-weight:700;font-size:30px;letter-spacing:.01em;margin:3px 0 2px;word-break:break-word}
   .code .sep{color:var(--cyan);font-weight:500;padding:0 .06em}
@@ -222,16 +229,22 @@
       + '</div>'
       + '<div class="row">'
         + '<button class="btn primary" id="mesh">Open all in mesh</button>'
+        + '<button class="btn" id="switch">Switch</button>'
         + '<button class="btn" id="share">Share</button>'
         + '<button class="btn ghost" id="copy">Copy link</button>'
         + '<span class="spacer"></span>'
         + '<div class="menu-wrap">'
           + '<button class="btn icon ghost" id="kebab" aria-label="More">\u22ef</button>'
           + '<div class="menu" id="menu">'
+            + '<button id="switch2">Switch / enter code\u2026</button>'
             + '<button id="clear">Clear all items</button>'
             + '<button id="newcode" class="danger">Start a new code</button>'
           + '</div>'
         + '</div>'
+      + '</div>'
+      + '<div class="switcher" id="switcher" hidden>'
+        + '<div class="field"><input id="switchin" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="adjective-noun"><button class="btn" id="switchgo">Go</button></div>'
+        + '<div class="chips" id="chips"></div>'
       + '</div>'
     + '</div>';
   }
@@ -262,6 +275,26 @@
         Q.newCode().then(function(c){ state.code=c; state.meta=null; state.items=[]; refresh(); });
       }
     };
+    // ── queue switcher (hot-swap to another queue without touching the URL) ──
+    function buildChips(){
+      var chipsEl=document.getElementById('chips'); if(!chipsEl) return;
+      var active=Q.getCode(), rec=Q.getRecent().filter(function(c){return c!==active;});
+      chipsEl.innerHTML = rec.length
+        ? rec.map(function(c){ return '<button class="chip" data-code="'+esc(c)+'">'+esc(c)+'</button>'; }).join('')
+        : '<span class="none">No other recent queues on this device yet.</span>';
+      chipsEl.querySelectorAll('.chip').forEach(function(b){ b.onclick=function(){ adopt(b.getAttribute('data-code')); }; });
+    }
+    function adopt(code){ code=(code||'').trim().toLowerCase(); if(!code) return; Q.setCode(code); state.code=code; state.meta=null; state.items=[]; refresh(); }
+    function openSwitcher(){
+      var sw=document.getElementById('switcher'); if(!sw) return;
+      sw.removeAttribute('hidden'); buildChips();
+      var i=document.getElementById('switchin'); if(i){ i.value=''; i.focus(); }
+    }
+    function toggleSwitcher(){ var sw=document.getElementById('switcher'); if(!sw) return; if(sw.hasAttribute('hidden')) openSwitcher(); else sw.setAttribute('hidden',''); }
+    document.getElementById('switch').onclick=toggleSwitcher;
+    document.getElementById('switch2').onclick=function(){ menu.classList.remove('open'); openSwitcher(); };
+    document.getElementById('switchgo').onclick=function(){ adopt(document.getElementById('switchin').value); };
+    document.getElementById('switchin').addEventListener('keydown',function(e){ if(e.key==='Enter') adopt(this.value); });
   }
 
   function drawQR(){

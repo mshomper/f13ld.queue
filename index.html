@@ -104,6 +104,7 @@
     font-size:12px;line-height:1;padding:6px 8px;transition:color .1s,border-color .1s}
   .iact:hover{color:var(--text);border-color:#3d3d52}
   .iact.del:hover{color:var(--fail);border-color:var(--fail)}
+  .iact.mesh:hover{color:var(--cyan);border-color:var(--cyan)}
 
   /* empty + landing */
   .empty{border:.5px dashed var(--border);border-radius:14px;padding:30px 20px;text-align:center;color:var(--dim)}
@@ -339,6 +340,7 @@
         + '<div class="item-meta">'+stats.map(function(s){return '<span class="stat">'+esc(s)+'</span>';}).join('')+'</div>'
       + '</div>'
       + '<div class="item-acts">'
+        + '<button class="iact mesh" title="Open in mesh">\u2b21</button>'
         + '<button class="iact ren" title="Rename">\u270e</button>'
         + '<button class="iact del" title="Remove">\u2715</button>'
       + '</div>'
@@ -348,6 +350,10 @@
   function wireItems(){
     app.querySelectorAll('.item').forEach(function(el){
       var id=el.getAttribute('data-id');
+      el.querySelector('.mesh').onclick=function(){
+        var it=state.items.find(function(i){return i.id===id;}); if(!it||!it.recipe) return;
+        window.open(Q.config.MESH_URL+'?r='+encodeURIComponent(JSON.stringify(it.recipe)),'_blank');
+      };
       el.querySelector('.del').onclick=function(){
         Q.rpc('queue_remove_item',{p_code:state.code,p_item_id:id}).then(function(){
           state.items=state.items.filter(function(i){return i.id!==id;}); renderQueue();

@@ -144,11 +144,14 @@
     var tries = 0;
     function attempt() {
       var c = genCode();
-      return rpc('queue_exists', { p_code: c }).then(function (exists) {
-        if (!exists) return setCode(c);
+      // Eager reserve: write the empty row now so the queue shows in Supabase
+      // immediately and uniqueness is enforced by the DB. Returns true if this
+      // call created the row (code was free), false if it was already taken.
+      return rpc('queue_reserve', { p_code: c }).then(function (reserved) {
+        if (reserved) return setCode(c);
         if (++tries < 12) return attempt();
         return setCode(c + '-' + (100 + (Math.random()*900|0)));  // numeric tiebreak, vanishingly rare
-      }).catch(function () { return setCode(c); });
+      }).catch(function () { return setCode(c); });  // RPC absent/offline → client-only reserve (lazy fallback)
     }
     return attempt();
   }

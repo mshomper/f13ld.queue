@@ -168,7 +168,7 @@
   var params = new URLSearchParams(location.search);
   if(params.has('code')){
     var c = (params.get('code')||'').trim().toLowerCase();
-    if(c) Q.setCode(c);
+    if(c && Q.isValidCode(c)) Q.setCode(c);
     history.replaceState({}, '', location.pathname);
   }
   state.code = Q.getCode();
@@ -193,6 +193,7 @@
   function adoptFromInput(){
     var v=(document.getElementById('codein').value||'').trim().toLowerCase();
     if(!v){ return; }
+    if(!Q.isValidCode(v)){ Q.toast('That\u2019s not a valid F13LD code \u2014 they look like silent-boat'); return; }
     Q.setCode(v); state.code=v; refresh();
   }
 
@@ -284,7 +285,7 @@
         : '<span class="none">No other recent queues on this device yet.</span>';
       chipsEl.querySelectorAll('.chip').forEach(function(b){ b.onclick=function(){ adopt(b.getAttribute('data-code')); }; });
     }
-    function adopt(code){ code=(code||'').trim().toLowerCase(); if(!code) return; Q.setCode(code); state.code=code; state.meta=null; state.items=[]; refresh(); }
+    function adopt(code){ code=(code||'').trim().toLowerCase(); if(!code) return; if(!Q.isValidCode(code)){ Q.toast('That\u2019s not a valid F13LD code \u2014 they look like silent-boat'); return; } Q.setCode(code); state.code=code; state.meta=null; state.items=[]; refresh(); }
     function openSwitcher(){
       var sw=document.getElementById('switcher'); if(!sw) return;
       sw.removeAttribute('hidden'); buildChips();
